@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Coldchain Guardian</title>
+  <meta name="description" content="A real-time vaccine cold-chain guardian running on QNX 8.0." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='9' y='3' width='14' height='26' rx='3' fill='none' stroke='%2359e3ff' stroke-width='2'/%3E%3Cpath d='M9 13h14' stroke='%2359e3ff' stroke-width='2'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three/build/three.module.js",
+      "three/addons/": "./vendor/three/addons/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="scene" aria-label="3D view of the vaccine refrigerator"></canvas>
+
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="9" y="3" width="14" height="26" rx="3"/><path d="M9 13h14"/></svg>
+      <div>
+        <div class="brand-name">Coldchain Guardian</div>
+        <div class="brand-sub">real-time vaccine protection · QNX 8.0</div>
+      </div>
+    </div>
+    <button class="link-pill" id="linkPill" type="button" aria-haspopup="dialog">
+      <span class="dot"></span><span id="linkText">connecting…</span>
+    </button>
+  </header>
+
+  <section class="readout" aria-live="polite">
+    <div class="temp"><span id="temp">--.-</span><span class="unit">°C</span></div>
+    <div class="band" aria-hidden="true">
+      <div class="band-track"><div class="band-safe"></div><div class="band-mark" id="bandMark"></div></div>
+      <div class="band-labels"><span>0</span><span>2</span><span>8</span><span>12</span></div>
+    </div>
+    <div class="verdict">
+      <span class="level" id="level">SAFE</span>
+      <span class="ttb" id="ttb">holding steady</span>
+    </div>
+    <dl class="facts">
+      <div><dt>trend</dt><dd id="slope">—</dd></div>
+      <div><dt>power</dt><dd id="power">grid</dd></div>
+      <div><dt>compressor</dt><dd id="comp">—</dd></div>
+      <div class="batt-row" id="battRow"><dt>battery</dt><dd><span class="batt"><i id="battFill"></i></span><span id="batt">100%</span></dd></div>
+    </dl>
+  </section>
+
+  <nav class="controls" aria-label="Scenario controls">
+    <button data-cmd="door_toggle" id="bDoor"><kbd>D</kbd><span>Open door</span></button>
+    <button data-cmd="power_toggle" id="bPower"><kbd>P</kbd><span>Cut grid power</span></button>
+    <button data-cmd="stress_toggle" id="bStress"><kbd>F</kbd><span>Flood CPU</span></button>
+    <button data-cmd="drill" id="bDrill" class="accent"><kbd>▶</kbd><span>Run blackout drill</span></button>
+    <button data-cmd="reset" id="bReset" class="ghost"><kbd>R</kbd><span>Reset</span></button>
+  </nav>
+
+  <section class="proof" id="proof" aria-label="Real-time proof">
+    <div class="proof-head">
+      <div class="series g"><i></i><b>Guardian</b><span>prio 60 · pulse timer</span><em id="gStat">—</em></div>
+      <div class="series n"><i></i><b>Naive monitor</b><span>prio 10 · same 5 ms loop</span><em id="nStat">—</em></div>
+      <div class="proof-note" id="proofNote">worst wake-up jitter, last second · log scale</div>
+    </div>
+    <canvas id="chart" aria-label="Jitter chart"></canvas>
+  </section>
+
+  <ol class="feed" id="feed" aria-label="Event log"></ol>
+  <div class="caption" id="caption" aria-live="polite"></div>
+  <div class="hint" id="hint">drag to orbit · click the door</div>
+
+  <dialog id="linkDlg">
+    <form method="dialog">
+      <h2>Connect to a QNX target</h2>
+      <p>Run <code>coldchaind --web /data/coldchain/web</code> on your QNX 8.0 target and open <code>http://&lt;target-ip&gt;:8080</code> directly — the target serves this dashboard itself. Or enter the address here (works from an <code>http://</code> page).</p>
+      <input id="linkUrl" placeholder="http://192.168.56.101:8080" autocomplete="off" spellcheck="false" />
+      <div class="dlg-row">
+        <button value="sim" class="ghost" type="submit">Use simulation</button>
+        <button value="live" type="submit">Connect</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

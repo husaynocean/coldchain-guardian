@@ -1,0 +1,4 @@
+build/
+*.kev
+.DS_Store
+node_modules/
