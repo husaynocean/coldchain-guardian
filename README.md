@@ -9,7 +9,7 @@ Coldchain Guardian is the safety brain for that fridge:
 - **It predicts.** Every 100 ms it fits a trend to the last 4 s of readings and projects the seconds left until the vials leave the safe band.
 - **It acts first.** When the grid drops, it engages battery cooling about 60 s *before* the projected breach, not after the alarm. It also sounds the door buzzer and logs every decision.
 - **It is never late.** The control loop is a priority-60 thread woken by a QNX kernel timer pulse every 5 ms. A second, identical loop at priority 10 (how most IoT firmware runs) sits beside it. When you press **Flood CPU**, the naive loop starves and the guardian doesn't flinch. The dashboard draws both from measured data, so you can watch that difference live.
-
+   **Live preview (simulation mode):** https://coldchain-guardian.vercel.app
 ![dashboard](docs/screenshot.png)
 
 ---
