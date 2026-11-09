@@ -156,7 +156,9 @@ int cc_resmgr_start(void)
     io_funcs.devctl = io_devctl;
     iofunc_attr_init(&attr, S_IFCHR | 0666, NULL, NULL);
 
-    if (resmgr_attach(dpp, &rattr, CC_DEVICE_PATH, _FTYPE_ANY, 0,
+    /* _RESMGR_FLAG_SELF: our own guardian thread opens this path too. Without
+     * it, QNX hides a resource manager's paths from its own process. */
+    if (resmgr_attach(dpp, &rattr, CC_DEVICE_PATH, _FTYPE_ANY, _RESMGR_FLAG_SELF,
                       &connect_funcs, &io_funcs, &attr) == -1) {
         perror("resmgr_attach " CC_DEVICE_PATH " (run as root)");
         return -1;

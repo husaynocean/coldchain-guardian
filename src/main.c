@@ -17,9 +17,10 @@
 static void usage(const char *a0)
 {
     fprintf(stderr,
-        "usage: %s [--port N] [--web DIR]\n"
+        "usage: %s [--port N] [--web DIR] [--mlock]\n"
         "  --port N   dashboard API port (default 8080)\n"
-        "  --web DIR  also serve the dashboard from DIR\n", a0);
+        "  --web DIR  also serve the dashboard from DIR\n"
+        "  --mlock    lock memory (no page faults in the control path)\n", a0);
 }
 
 int main(int argc, char **argv)
@@ -28,16 +29,26 @@ int main(int argc, char **argv)
     const char *web = NULL;
     pthread_t t;
 
+    int lock = 0;
+
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+    fprintf(stderr, "Coldchain Guardian %s starting...\n", CC_VERSION);
+
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--port") && i + 1 < argc) port = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--web") && i + 1 < argc) web = argv[++i];
+        else if (!strcmp(argv[i], "--mlock")) lock = 1;
         else { usage(argv[0]); return 1; }
     }
 
     signal(SIGPIPE, SIG_IGN);
-    /* real-time hygiene: no page faults in the control path */
-    if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0)
-        fprintf(stderr, "note: mlockall unavailable, continuing\n");
+    /* real-time hygiene: no page faults in the control path (opt-in) */
+    if (lock) {
+        fprintf(stderr, "locking memory...\n");
+        if (mlockall(MCL_CURRENT) != 0)
+            fprintf(stderr, "note: mlockall unavailable, continuing\n");
+    }
 
     cc_world_init();
     fprintf(stderr, "Coldchain Guardian %s on %s\n", CC_VERSION, W.platform);
