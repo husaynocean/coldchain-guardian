@@ -14,7 +14,7 @@ Coldchain Guardian is the safety brain for that fridge, built on QNX 8.0:
 
 - **Predicts.** A least-squares trend over the last 4 s of readings projects the seconds left until the vials leave 2–8 °C.
 - **Acts first.** On grid loss, it engages battery cooling ~60 s *before* the projected breach. It also sounds the door buzzer and logs every decision.
-- **Is never late, and shows it.** The guardian is a priority-60 thread woken every 5 ms by a kernel timer pulse. An identical loop runs at priority 10. Hit *Flood CPU* and the 3D dashboard (Three.js) shows the low-priority loop stall while the guardian keeps pace, drawn from measured tick counts and jitter.
+- **Keeps running under overload, and shows it.** The guardian is a priority-60 thread woken every 5 ms by a kernel timer pulse. An identical loop runs at priority 10. Hit *Flood CPU* (busy threads at priority 11) and the 3D dashboard (Three.js) shows the low-priority loop stop completely while the guardian keeps pace, drawn from measured tick counts and jitter.
 
 **How it uses QNX (verifiable files):**
 
@@ -24,7 +24,7 @@ Coldchain Guardian is the safety brain for that fridge, built on QNX 8.0:
 - `src/world.c`: `PTHREAD_PRIO_INHERIT` mutex.
 - `tools/trace.sh`: `tracelogger`/`traceprinter` capture showing guardian events in the kernel trace.
 
-**Results (fill in from your run):** on QNX 8.0 x86_64 under a full CPU flood, the guardian's worst-case wake-up jitter was ___ µs with ___ missed deadlines. Over the same window, the priority-10 loop reached ___ ms with ___ misses.
+**Results (QNX 8.0.0 x86_64, VirtualBox VM on a Windows 11 laptop, 12 Nov 2026):** during a 16.5 s CPU flood the priority-10 loop did not run once (starved for 16.5 s), while the guardian kept ticking throughout with a worst gap of 15 ms. Absolute jitter in a desktop VM is limited by the host (Windows pauses the virtual CPUs), so the microsecond-level figures need real hardware and are not claimed here. Re-measure before submitting and update these numbers.
 
 **Built with:** QNX SDP 8.0, C11, qcc, Three.js, Server-Sent Events.
 **Target / toolchain:** QNX 8.0 x86_64 VM (mkqnximage), `qcc -Vgcc_ntox86_64`.

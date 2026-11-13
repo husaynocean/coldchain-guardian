@@ -198,7 +198,7 @@ pidin -p coldchaind          # see the priorities: 60f, 50r, 20f, 15r, 10r …
 echo stress_on > /dev/coldchain
 ```
 
-This starts one busy thread per CPU, plus one more, all at priority 10. In the dashboard:
+This starts one busy thread per CPU, plus one more, all at priority **11**: ordinary work that outranks the naive loop by a single level. It stops itself after 30 s, because your ssh shell also runs at priority 10 and freezes with it. In the dashboard:
 
 - The **outer grey orb stalls and turns red.** The naive loop competes with the hogs as an equal and gets a slice only when round-robin allows.
 - The **inner cyan orb keeps its pace.** The guardian outranks all of them, so the scheduler runs it the moment its pulse arrives.

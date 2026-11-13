@@ -11,7 +11,7 @@ const store = {
 
 // ---------------------------------------------------------------- sources
 class LiveSource {
-  constructor(base) { this.base = base.replace(/\/$/, ''); this.kind = 'live'; }
+  constructor(base) { this.base = base.replace(/[/]$/, ''); this.kind = 'live'; }
   start(onData, onState) {
     this.es = new EventSource(this.base + '/api/stream');
     this.es.onmessage = (e) => { try { onData(JSON.parse(e.data)); onState('live'); } catch { /* partial */ } };
@@ -40,7 +40,7 @@ async function probe(base, ms = 3000) {
   const ctl = new AbortController();
   const to = setTimeout(() => ctl.abort(), ms);
   try {
-    const r = await fetch(base.replace(/\/$/, '') + '/api/state', { signal: ctl.signal });
+    const r = await fetch(base.replace(/[/]$/, '') + '/api/state', { signal: ctl.signal });
     if (!r.ok) return false;
     const j = await r.json();
     return typeof j.temp === 'number';
@@ -74,7 +74,7 @@ async function boot() {
   const saved = store.get('cc.target');
   const candidates = [];
   if (qp) candidates.push(qp);
-  if (location.protocol.startsWith('http') && !/vercel\.app|github\.io|claude/.test(location.host)) candidates.push(location.origin);
+  if (location.protocol.startsWith('http') && !['vercel.app', 'github.io', 'claude'].some((h) => location.host.includes(h))) candidates.push(location.origin);
   if (saved) candidates.push(saved);
   for (const c of candidates) {
     if (await probe(c)) { if (c !== location.origin) store.set('cc.target', c); return use(new LiveSource(c)); }
@@ -88,7 +88,7 @@ function send(c) {
 }
 
 // ---------------------------------------------------------------- readout
-const fmtUs = (us) => (us >= 1000 ? `${(us / 1000).toFixed(us >= 10000 ? 0 : 1)} ms` : `${us.toFixed(us < 10 ? 1 : 0)} µs`);
+const fmtUs = (us) => (us >= 1e6 ? `${(us / 1e6).toFixed(1)} s` : us >= 1000 ? `${(us / 1000).toFixed(us >= 10000 ? 0 : 1)} ms` : `${us.toFixed(us < 10 ? 1 : 0)} µs`);
 
 function onData(d) {
   last = d;
@@ -124,7 +124,7 @@ function onData(d) {
 
   const g = d.guardian, n = d.naive;
   $('gStat').textContent = `${fmtUs(g.win_max_us)} · ${g.misses} missed`;
-  $('nStat').textContent = `${fmtUs(n.win_max_us)} · ${n.misses} missed`;
+  $('nStat').textContent = n.stalled_us > 50000 ? `starved for ${fmtUs(n.stalled_us)} · ${n.misses} missed` : `${fmtUs(n.win_max_us)} · ${n.misses} missed`;
   $('nStat').classList.toggle('bad', n.win_max_us > 1000);
   $('proofNote').textContent = d.simulated
     ? 'SIMULATED timing — connect a QNX target for measured values'
@@ -151,7 +151,7 @@ const chart = (() => {
   const N = 300; let g = [], n = [];
   const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
   const y = (us, h) => {
-    const lo = Math.log10(1), hi = Math.log10(200000);
+    const lo = Math.log10(1), hi = Math.log10(60e6);
     const v = Math.log10(Math.max(1, us));
     return h - 4 - ((v - lo) / (hi - lo)) * (h - 10);
   };
@@ -162,7 +162,7 @@ const chart = (() => {
     ctx.clearRect(0, 0, w, h);
     ctx.font = '10px "JetBrains Mono", monospace';
     // grid: 10 µs, 100 µs, 1 ms (deadline), 10 ms, 100 ms
-    for (const [us, label] of [[10, '10µs'], [100, '100µs'], [1000, '1ms deadline'], [10000, '10ms'], [100000, '100ms']]) {
+    for (const [us, label] of [[10, '10µs'], [100, '100µs'], [1000, '1ms deadline'], [10000, '10ms'], [100000, '100ms'], [1e6, '1s'], [1e7, '10s']]) {
       const yy = y(us, h);
       ctx.strokeStyle = us === 1000 ? 'rgba(255,77,94,.45)' : 'rgba(255,255,255,.06)';
       ctx.setLineDash(us === 1000 ? [3, 4] : []);
@@ -193,9 +193,9 @@ const DRILL = [
   [0, 'reset', 'Kano, 2:14 pm. 32 °C outside.', 'A clinic fridge holds 63 vials at 2–8 °C.'],
   [5, 'power_off', 'The grid drops.', 'The guardian projects when the vials will breach 8 °C.'],
   [24, null, 'It acts before the breach.', 'Battery cooling engages with ~60 s to spare.'],
-  [34, 'stress_on', 'Now flood the CPU.', 'Busy threads at priority 10. Watch the outer orbit stall.'],
-  [46, 'door_open', 'A nurse leaves the door open.', 'Cold air spills. The guardian is still on time.'],
-  [60, 'door_close', 'Door closed.', 'Guardian: 0 deadlines missed. Naive monitor: starved.'],
+  [34, 'stress_on', 'Now flood the CPU.', 'Busy threads at priority 11 outrank the naive loop. Watch the outer orbit stall.'],
+  [46, 'door_open', 'A nurse leaves the door open.', 'Cold air spills. The guardian is still running.'],
+  [60, 'door_close', 'Door closed.', 'The guardian never stopped. The naive monitor got no CPU time at all.'],
   [70, 'stress_off', 'Load gone.', ''],
   [75, 'power_on', 'Grid restored.', 'Battery released, compressor back on mains.'],
   [84, null, '', ''],
@@ -234,7 +234,7 @@ $('linkDlg').addEventListener('close', async () => {
   if (v === 'live') {
     let url = $('linkUrl').value.trim();
     if (!url) return;
-    if (!/^https?:\/\//.test(url)) url = 'http://' + url;
+    if (!/^https?:[/][/]/.test(url)) url = 'http://' + url;
     $('linkText').textContent = 'connecting…';
     if (await probe(url, 2500)) { store.set('cc.target', url); use(new LiveSource(url)); }
     else { $('linkText').textContent = 'target unreachable — still simulating'; }

@@ -53,6 +53,7 @@ static void timing_update(cc_timing_t *t, winmax_t *w, double interval_us, doubl
     while (b < 7 && j >= edges[b]) b++;
     t->hist[b]++;
     t->ticks++;
+    t->last_s = cc_now_s();
     t->last_jitter_us = j;
     if (j > t->max_jitter_us) t->max_jitter_us = j;
     if (j > CC_GUARD_DEADLINE_US) t->misses++;

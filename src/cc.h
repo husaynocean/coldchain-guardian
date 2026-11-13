@@ -9,7 +9,7 @@
  *   prio 20  plant         vaccine-fridge thermal simulation (10 ms)
  *   prio 15  http          REST + Server-Sent Events for the 3D dashboard
  *   prio 10  naive         the same check as the guardian, at "normal" priority
- *   prio 10  stress x N    CPU hogs, toggled from the UI ("Flood CPU")
+ *   prio 11  stress x N    CPU hogs, toggled from the UI ("Flood CPU")
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -31,7 +31,8 @@
 #define CC_PRIO_PLANT     20
 #define CC_PRIO_HTTP      15
 #define CC_PRIO_NAIVE     10
-#define CC_PRIO_STRESS    10
+#define CC_PRIO_STRESS    11   /* ordinary app load: outranks the naive loop only */
+#define CC_STRESS_MAX_S   30   /* flood stops itself after this long */
 
 #define CC_GUARD_PERIOD_US   5000   /* guardian tick: 5 ms  */
 #define CC_GUARD_DEADLINE_US 1000   /* must wake within 1 ms of its slot */
@@ -64,6 +65,7 @@ typedef struct {
     double   exec_max_us;
     uint64_t misses;           /* wake-ups later than the deadline      */
     uint32_t hist[8];          /* <10,<25,<50,<100,<250,<1000,<5000,>=5000 us */
+    double   last_s;           /* monotonic time of the last tick (0 = never) */
 } cc_timing_t;
 
 typedef struct {

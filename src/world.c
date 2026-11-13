@@ -142,12 +142,24 @@ int cc_command(const char *in, char *reply, int replylen)
 
 static int timing_json(char *b, int len, const cc_timing_t *t)
 {
+    /* A starved loop cannot update its own statistics, so the snapshot adds
+     * the time it has currently been overdue: "it has not run for X". */
+    double win = t->win_max_us, stalled_us = 0;
+    unsigned long long misses = t->misses;
+    if (t->last_s > 0) {
+        double overdue = (cc_now_s() - t->last_s) * 1e6 - t->period_us;
+        if (overdue > CC_GUARD_DEADLINE_US) {
+            stalled_us = overdue;
+            if (overdue > win) win = overdue;
+            misses += (unsigned long long)(overdue / t->period_us);
+        }
+    }
     return snprintf(b, len,
         "{\"ticks\":%llu,\"period_us\":%.0f,\"jitter_us\":%.1f,\"max_jitter_us\":%.1f,"
-        "\"win_max_us\":%.1f,\"exec_us\":%.1f,\"exec_max_us\":%.1f,\"misses\":%llu,"
+        "\"win_max_us\":%.1f,\"stalled_us\":%.0f,\"exec_us\":%.1f,\"exec_max_us\":%.1f,\"misses\":%llu,"
         "\"hist\":[%u,%u,%u,%u,%u,%u,%u,%u]}",
         (unsigned long long)t->ticks, t->period_us, t->last_jitter_us, t->max_jitter_us,
-        t->win_max_us, t->exec_us, t->exec_max_us, (unsigned long long)t->misses,
+        win, stalled_us, t->exec_us, t->exec_max_us, misses,
         t->hist[0], t->hist[1], t->hist[2], t->hist[3], t->hist[4], t->hist[5], t->hist[6], t->hist[7]);
 }
 

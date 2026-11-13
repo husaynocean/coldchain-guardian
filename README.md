@@ -8,8 +8,9 @@ Coldchain Guardian is the safety brain for that fridge:
 
 - **It predicts.** Every 100 ms it fits a trend to the last 4 s of readings and projects the seconds left until the vials leave the safe band.
 - **It acts first.** When the grid drops, it engages battery cooling about 60 s *before* the projected breach, not after the alarm. It also sounds the door buzzer and logs every decision.
-- **It is never late.** The control loop is a priority-60 thread woken by a QNX kernel timer pulse every 5 ms. A second, identical loop at priority 10 (how most IoT firmware runs) sits beside it. When you press **Flood CPU**, the naive loop starves and the guardian doesn't flinch. The dashboard draws both from measured data, so you can watch that difference live.
-   **Live preview (simulation mode):** https://coldchain-guardian.vercel.app
+- **It keeps running when the system is overloaded.** The control loop is a priority-60 thread woken by a QNX kernel timer pulse every 5 ms. A second, identical loop at priority 10 (how most IoT firmware runs) sits beside it. When you press **Flood CPU**, ordinary work at priority 11 takes every core: the naive loop gets no CPU time at all, and the guardian carries on. The dashboard draws both from measured data, so you can watch that difference live.
+
+**Live preview (simulation mode):** https://coldchain-guardian.vercel.app
 ![dashboard](docs/screenshot.png)
 
 ---
@@ -22,13 +23,26 @@ Coldchain Guardian is the safety brain for that fridge:
 | **Custom `devctl()`** `DCMD_CC_GET_SAMPLE` | `src/resmgr.c` · `io_devctl()`, `cc_sensor_read()` | The guardian reads the sensor with one synchronous `MsgSend()`, not shared memory. |
 | **Priority inheritance across message passing** | `src/resmgr.c` (header comment) | The driver thread (prio 50) runs the guardian's request at prio 60, so nothing the guardian outranks can starve its sensor read. |
 | **Kernel timer → pulse** (`timer_create` + `SIGEV_PULSE_INIT` + `MsgReceivePulse`) | `src/guardian.c` · `cc_guardian_thread()` | A deterministic 5 ms tick with no signals and no polling. |
-| **Explicit real-time scheduling** (`SCHED_FIFO`/`SCHED_RR`, prio 60/50/20/15/10) | `src/main.c`, `src/platform.c` · `cc_thread()` | The guardian outranks everything else; the CPU flood runs at prio 10. |
+| **Explicit real-time scheduling** (`SCHED_FIFO`/`SCHED_RR`, prio 60/50/20/15/10) | `src/main.c`, `src/platform.c` · `cc_thread()` | The guardian outranks everything else; the CPU flood runs at prio 11, one level above the naive loop. |
 | **`ClockCycles()` + system page `qtime->cycles_per_sec`** | `src/platform.c` | Cycle-accurate measurement of the loop's own jitter and execution time. |
 | **Priority-inheritance mutex** | `src/world.c` · `cc_world_init()` | A prio-15 web thread holding the state lock is boosted, never left blocking the guardian. |
 | **`trace_logf()` user events + `tracelogger` / `traceprinter`** | `src/platform.c` · `cc_trace()`, `tools/trace.sh` | Every state change, action and deadline miss sits in the kernel event log next to every context switch. That's independent proof of the timing. |
 | **`mlockall()`** | `src/main.c` | No page faults in the control path. |
 
 Actuation goes through the driver too: the guardian's `write(fd, "backup_on")` is itself a message to `/dev/coldchain`.
+
+---
+
+## Measured results
+
+Measured on QNX 8.0.0 x86_64 in a VirtualBox 7.2 VM (2 vCPUs) on a Windows 11 laptop (Intel i5-8350U), 12 Nov 2026.
+
+| | Guardian (prio 60) | Naive monitor (prio 10) |
+|---|---|---|
+| **During a 16.5 s CPU flood** (3 busy threads at prio 11) | kept ticking throughout, worst gap 15 ms | **did not run once: starved for 16.5 s** |
+| Idle, 16,333 ticks | 74% within 1 ms, 98% within 5 ms | about the same (nothing competes with it) |
+
+**What these numbers do and don't show.** The flood result is the scheduler doing its job: priority alone decides who runs, and it holds under full load. The idle jitter is *not* QNX's real-time performance. QNX's clock is set to a 1 ms tick (`pidin syspage=qtime`), but a desktop VM delivers those ticks late whenever Windows pauses the virtual CPUs, so both loops see the same millisecond-level noise, with occasional spikes above 100 ms. Absolute jitter needs real hardware (for example a Raspberry Pi 5 with `make qnx-arm`), which I have not measured.
 
 ---
 
@@ -49,7 +63,7 @@ Actuation goes through the driver too: the guardian's `write(fd, "backup_on")` i
  │  PLANT prio 20  ── thermal model of the fridge, 10 ms ──┘                │
  │  HTTP  prio 15  ── /api/state · /api/stream (SSE) · /api/cmd · static UI │
  │  NAIVE prio 10  ── same 5 ms loop, no privileges (the control group)     │
- │  FLOOD prio 10  ── N+1 busy threads, toggled from the UI                 │
+ │  FLOOD prio 11  ── N+1 busy threads, toggled from the UI, 30 s max       │
  └──────────────────────────────────────────────────────────────────────────┘
                  │ HTTP + Server-Sent Events, 10 Hz
                  ▼
@@ -84,6 +98,9 @@ The default users are `root`/`root` and `qnxuser`/`qnxuser`.
 ```bash
 make qnx                               # → build/x86_64/coldchaind
 TARGET=192.168.56.101 ./tools/deploy.sh
+
+:: Windows host (cmd): compiles, copies and runs in one step
+deploy.bat 192.168.56.101
 ```
 
 Or by hand:
@@ -153,7 +170,8 @@ Built with Three.js r170, vendored in `web/vendor`. Nothing is loaded from a CDN
 ```
 src/        coldchaind (C11): resmgr.c guardian.c plant.c world.c http.c stress.c platform.c main.c
 web/        dashboard: index.html app.js scene.js sim.js style.css vendor/three
-tools/      deploy.sh (host) · trace.sh (target)
+tools/      deploy.sh (Linux/macOS host) · trace.sh (target)
+deploy.bat  build + copy + run from a Windows host
 docs/       CODELAB.md (tutorial) · SUBMISSION.md
 ```
 

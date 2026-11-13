@@ -40,7 +40,9 @@ export class Sim {
   setStress(on) {
     if (on === this.stress) return;
     this.stress = on;
-    this.ev(on ? 'w' : 'i', on ? 'CPU flood: 3 busy threads at prio 10' : 'CPU flood stopped');
+    this.stallAt = on ? this.now() : null;
+    if (!on) { this.n._cur = 0; this.n._prev = 0; this.n.win_max_us = 0; }
+    this.ev(on ? 'w' : 'i', on ? 'CPU flood: 3 busy threads at prio 11' : 'CPU flood stopped');
   }
 
   // advance the plant by dt seconds in 10 ms steps, the guardian every 100 ms
@@ -104,22 +106,25 @@ export class Sim {
     };
     for (let i = 0; i < ticks; i++) {
       upd(this.g, 1.5 + Math.random() * (this.stress ? 9 : 6));
-      if (this.stress) {
-        // starved: the naive loop only gets the CPU between round-robin slices
-        if (Math.random() < 0.18) upd(this.n, 4000 + Math.random() * 40000);
-      } else upd(this.n, 3 + Math.random() * 30 + (Math.random() < 0.01 ? 200 : 0));
+      // under the flood the naive loop is outranked and never runs
+      if (!this.stress) upd(this.n, 3 + Math.random() * 30 + (Math.random() < 0.01 ? 200 : 0));
     }
   }
 
   snapshot() {
     const strip = ({ _cur, _prev, ...t }) => t;
+    const naive = strip(this.n);
+    if (this.stress && this.stallAt != null) {
+      const us = (this.now() - this.stallAt) * 1e6;
+      naive.stalled_us = us; naive.win_max_us = Math.max(naive.win_max_us, us); naive.misses += Math.floor(us / 5000);
+    }
     return {
       v: 'sim', platform: 'browser simulation', qnx: false, simulated: true, t: this.now(),
       temp: this.temp ?? this.T, ambient: this.amb, door: this.door, door_s: this.door_s, power: this.power,
       compressor: this.comp, backup: this.backup, fault: this.fault, battery: this.batt,
       level: this.level, slope: this.slope * 60, ttb: this.ttb, buzzer: this.buzzer,
       stress: this.stress, stress_threads: this.stress ? 3 : 0, cpus: 2,
-      guardian: strip(this.g), naive: strip(this.n), events: this.events.slice(),
+      guardian: strip(this.g), naive, events: this.events.slice(),
     };
   }
 }

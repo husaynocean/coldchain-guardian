@@ -396,7 +396,7 @@ export class Scene {
     };
     place(this.gOrb, this.gTail, T.gShown, 1.25);
     place(this.nOrb, this.nTail, T.nShown, 1.55);
-    const starving = s.naive && s.naive.win_max_us > 1000;
+    const starving = s.naive && s.naive.stalled_us > 50000;
     this.nOrb.material.color.lerp(starving ? C.alarm : C.naive, Math.min(1, 4 * dt));
     this.nTail.material.color.copy(this.nOrb.material.color);
     this.nRing.material.color.copy(this.nOrb.material.color);
