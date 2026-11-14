@@ -199,7 +199,7 @@ src/        coldchaind (C11): resmgr.c guardian.c plant.c world.c http.c stress.
 web/        dashboard: index.html app.js scene.js sim.js style.css vendor/three
 tools/      deploy.sh (Linux/macOS host) · trace.sh (target)
 deploy.bat  build + copy + run from a Windows host
-docs/       CODELAB.md (tutorial) · SUBMISSION.md
+docs/       CODELAB.md (step-by-step tutorial)
 ```
 
 ## Licence
