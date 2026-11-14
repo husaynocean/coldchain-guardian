@@ -24,51 +24,85 @@ A miniature **Coldchain Guardian** that:
 
 ### What you need
 
-- A Windows, Linux or macOS computer with about 15 GB free (macOS: build on a Linux VM)
-- VMware Workstation Player or VirtualBox (Windows), or QEMU/KVM (Ubuntu)
+- A Windows, Linux or macOS computer with about 15 GB free and 8 GB of RAM (macOS: build on a Linux VM)
+- VirtualBox or VMware (Windows), or QEMU/KVM (Ubuntu)
 - The repo: `git clone https://github.com/husaynocean/coldchain-guardian`
+
+> 🪟 **Windows users, read this first.** I built this on a Windows 11 laptop, and every command below was run in **Command Prompt (cmd)**, not PowerShell. The QNX environment script is a `.bat` file: it only works in cmd, and only for the window you run it in. If you see `'qcc' is not recognized`, you're in PowerShell or a fresh window. Type `cmd`, then run `qnxsdp-env.bat` again.
 
 ---
 
-## 1. Get QNX SDP 8.0 for free (20 min)
+## 1. Get QNX SDP 8.0 for free (30 min, plus waiting for the licence)
 
-1. Go to **qnx.com → QNX Everywhere** and sign up for a free non-commercial licence. You get a licence key by email.
-2. Install the **QNX Software Center**, sign in, and add the licence.
-3. In Software Center choose **Add Installation → QNX Software Development Platform 8.0**. The default install path is `~/qnx800` on Linux and `C:\Users\<you>\qnx800` on Windows.
-4. Open a terminal and load the environment:
+1. Create a **myQNX account** at qnx.com and click the activation link in the email.
+2. While signed in, request the free non-commercial licence at **qnx.com/getqnx**. It can take a day or more to arrive. If it hasn't appeared after 24 hours, email the address on that page; mine arrived after I did.
+3. When it shows up in the **myQNX License Manager** (qnx.com/account/dashboard), click **Accept License**, then click the **Users** cell → **Deploy**, and enter your own email.
+4. Download **QNX Software Center** for your OS from the QNX download page and sign in with the same account.
+5. Choose **Add Installation**, expand **QNX® Software Development Platform 8.0**, select the SDP itself (not a BSP or add-on), and install to the default folder: `~/qnx800` on Linux, `C:\Users\<you>\qnx800` on Windows. It's several GB.
+6. Load the environment in every new terminal:
 
 ```bash
-source ~/qnx800/qnxsdp-env.sh        # Linux
+source ~/qnx800/qnxsdp-env.sh             # Linux
 ```
 ```bat
-C:\Users\you\qnx800\qnxsdp-env.bat   :: Windows (cmd.exe)
+C:\Users\<you>\qnx800\qnxsdp-env.bat     :: Windows, in cmd.exe
 ```
 
-✅ **Checkpoint:** `qcc -V` lists `gcc_ntox86_64` and `gcc_ntoaarch64le`.
+✅ **Checkpoint:** `qcc -V` lists `gcc_ntox86_64` and `gcc_ntoaarch64le`, and `where mkqnximage` (Windows) or `which mkqnximage` (Linux) finds the image builder.
 
 > 💡 **Web-dev translation:** `qcc` is to QNX what `tsc` + `webpack` are to a browser. It's a cross-compiler. You build on your laptop and ship the binary to the target.
 
-## 2. Boot a QNX target with no hardware (15 min)
+## 2. Boot a QNX target with no hardware (20 min)
 
-`mkqnximage` generates a complete bootable QNX system as a virtual machine:
+`mkqnximage` generates a complete bootable QNX system as a virtual machine. On Windows, QEMU isn't supported, so use VirtualBox (or VMware).
 
-```bash
-mkdir ~/qnxvm && cd ~/qnxvm
-mkqnximage --type=qemu --arch=x86_64 --run      # Ubuntu host
-mkqnximage --type=vbox --arch=x86_64 --run      # Windows host, VirtualBox
-mkqnximage --type=vmware --arch=x86_64 --run    # Windows host, VMware
+**VirtualBox, one-time setup:** open **File → Tools → Network Manager → Host-only Networks**. If the list is empty, click **Create**, and make sure **DHCP Server** is enabled. The default `192.168.56.1/24` is fine.
+
+**Make an SSH key first.** The image only allows `root` to log in over SSH with a key, not a password:
+
+```bat
+ssh-keygen -t ed25519            :: press Enter three times
 ```
 
-On VirtualBox, the first time you may need **Tools → Network → Create** a host-only network with DHCP enabled.
+**Fix the SSH server before the first build.** Newer QNX OpenSSH packages split `sshd` into helper programs (`sshd-session`, `sshd-auth`) that the default image doesn't include, so `sshd` fails at boot with `/usr/libexec/sshd-auth does not exist`. Check that your SDP has them, then add two snippet files (this follows the workaround in the QNX 8.0.2 networking release notes):
 
-In a second terminal (same directory), find the IP and log in. The password is the same as the username:
+```bat
+mkdir C:\qnxvm
+cd C:\qnxvm
+dir C:\Users\<you>\qnx800\target\qnx\x86_64\usr\libexec
+mkdir local\snippets
+echo procmgr_symlink /system/bin/sshd-session /usr/libexec/sshd-session> local\snippets\ifs_env.custom
+echo procmgr_symlink /system/bin/sshd-auth /usr/libexec/sshd-auth>> local\snippets\ifs_env.custom
+echo bin/sshd-session=usr/libexec/sshd-session> local\snippets\system_files.custom
+echo bin/sshd-auth=usr/libexec/sshd-auth>> local\snippets\system_files.custom
+```
 
-```bash
+Leave out any line for a helper that `dir` didn't list. On Linux, write the same lines into the same files with any editor.
+
+**Build and boot:**
+
+```bat
+mkqnximage --type=vbox --arch=x86_64 --ssh-ident=C:/Users/<you>/.ssh/id_ed25519.pub --run
 mkqnximage --getip
-ssh root@192.168.56.101
+```
+
+Use `--type=qemu` on Ubuntu, and `~/.ssh/id_ed25519.pub` for the key path. `--run=-h` starts the VM without a window.
+
+**Log in.** Type the IP with no `< >` around it (cmd treats those as special characters):
+
+```bat
+ssh root@192.168.56.104
+```
+
+If Windows' built-in ssh client fails with `Corrupted MAC on input`, force a different cipher. You'll need these two options on every `ssh` and `scp` to this VM:
+
+```bat
+ssh -c aes128-ctr -o MACs=hmac-sha2-256 root@192.168.56.104
 ```
 
 ✅ **Checkpoint:** `uname -a` on the target prints `QNX ... 8.0.0 ... x86_64`.
+
+> ⚠️ **Before restarting Windows,** run `mkqnximage --stop`. Otherwise VirtualBox saves the VM's state, and if any host setting changes in between, it refuses to restore it. If that happens: `"C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" discardstate noname`.
 
 ## 3. Hello, target (5 min)
 
@@ -123,10 +157,20 @@ return _RESMGR_NPARTS(0);
 
 Build and run the full daemon now. We'll explore the rest piece by piece.
 
-```bash
-cd coldchain-guardian && make qnx && TARGET=<ip> ./tools/deploy.sh
-ssh root@<ip> /data/coldchain/coldchaind --web /data/coldchain/web &
+```bat
+:: Windows (cmd): compiles, copies and runs in one step. Ctrl+C stops it on QNX too.
+cd C:\dev\coldchain-guardian
+deploy.bat 192.168.56.104
 ```
+```bash
+# Linux
+make qnx && TARGET=192.168.56.104 ./tools/deploy.sh
+ssh root@192.168.56.104 /data/coldchain/coldchaind --web /data/coldchain/web
+```
+
+Open `http://<ip>:8080` in your browser. The pill in the corner should read **LIVE · QNX 8.0.0**.
+
+> 🐛 **The bug I hit here:** the first run printed `open /dev/coldchain: No such file or directory`, even though the driver had just announced itself. QNX hides a resource manager's own paths from its own process, to stop a single-threaded server from deadlocking on itself. The guardian lives in the same process as the driver, so it couldn't see it. The fix is one flag: `resmgr_attach(..., _RESMGR_FLAG_SELF, ...)`. It's safe here because the driver runs its own dispatch thread.
 
 ✅ **Checkpoint:** on the target,
 
@@ -200,12 +244,16 @@ echo stress_on > /dev/coldchain
 
 This starts one busy thread per CPU, plus one more, all at priority **11**: ordinary work that outranks the naive loop by a single level. It stops itself after 30 s, because your ssh shell also runs at priority 10 and freezes with it. In the dashboard:
 
-- The **outer grey orb stalls and turns red.** The naive loop competes with the hogs as an equal and gets a slice only when round-robin allows.
+- The **outer grey orb stops and turns red,** and its readout switches to `starved for 12.3 s`. Priority 11 beats priority 10 every time, so the naive loop gets no CPU at all until the flood ends.
 - The **inner cyan orb keeps its pace.** The guardian outranks all of them, so the scheduler runs it the moment its pulse arrives.
 
 > 💡 **Priority inheritance, the subtle part:** the driver thread is priority 50. When the guardian (60) sends it a `devctl`, the driver runs that request at **60**. If it didn't, a priority-55 task could delay the guardian's sensor read. This is *priority inversion*, the bug that famously reset the Mars Pathfinder lander. QNX channels inherit priority by default, and our `pthread_mutex` asks for `PTHREAD_PRIO_INHERIT` explicitly.
 
+You can watch the inheritance happen. While `coldchaind` runs, look at thread 2 in `pidin -p coldchaind`: it was created at priority 50, but it shows **60r** because it's serving the guardian.
+
 Write down the numbers from the proof strip, with and without the flood. These are your results.
+
+> 📏 **An honest note on VMs.** In my VirtualBox VM on a Windows laptop, both loops showed millisecond-level jitter even when idle, with occasional spikes above 100 ms. That's the host pausing the whole virtual CPU, not QNX. QNX's tick was 1 ms (`pidin syspage=qtime`). The flood result is the one a VM can show faithfully. For microsecond numbers, use real hardware such as a Raspberry Pi 5.
 
 ## 8. Get proof from the kernel itself (15 min)
 
@@ -217,11 +265,25 @@ trace_logf(_NTO_TRACE_USERFIRST + CC_TR_STATE, "%s -> %s T=%s", from, to, temp);
 
 `trace_logf` doesn't support `%f`, so format numbers with `snprintf` first.
 
-Capture 10 buffers while the flood runs:
+Capture a few buffers while the system runs:
 
 ```sh
 echo stress_on > /dev/coldchain
-sh /data/coldchain/trace.sh        # wraps: tracelogger -d1 -n 10 -f coldchain.kev
+sh /data/coldchain/trace.sh        # wraps: tracelogger -n 3 -f coldchain.kev, then traceprinter
+```
+
+Things that tripped me up, so they don't trip you:
+
+- **Don't add `-d1`.** That's daemon mode: `tracelogger` waits for your program to start tracing itself, so it appears to hang forever.
+- **`Resource busy`** means an interrupted capture is still holding the trace buffers. Run `slay -f tracelogger`.
+- **`traceprinter` isn't in the default VM image.** Copy it from `qnx800/target/qnx/x86_64/usr/bin/traceprinter`. `deploy.bat` does this for you.
+- **On Windows, keep `.sh` files with Unix line endings.** If a script fails with `: cannot execute - No such file or directory`, Git converted it to CRLF. The repo's `.gitattributes` prevents this.
+
+The guardian's events appear right in the kernel log:
+
+```
+t:0x425f8293197 CPU:00 USREVENT :EVENT:102 STR:"guardian late interval_us=6243"
+t:0x425f88fc09d CPU:01 USREVENT :EVENT:102 STR:"guardian late interval_us=3817"
 ```
 
 Copy `coldchain.kev` to your PC and open it in the **System Profiler** (Momentics IDE or QNX Toolkit for VS Code). Find the `coldchaind` guardian thread. You'll see it preempting the flood threads every 5 ms, with your user events right beside it.
@@ -253,4 +315,4 @@ The 3D orbits move by the **measured** tick counts (`guardian.ticks`, `naive.tic
 You wrote a QNX driver, talked to it with `cat`, `echo` and `devctl`, built a pulse-driven control loop, proved it holds a 5 ms deadline under load with both a live chart and a kernel trace, and streamed it to a 3D web UI.
 
 ---
-*Found a step that didn't work for you? Open an issue. This codelab is tested against QNX SDP 8.0 on an x86_64 VM.*
+*Found a step that didn't work for you? Open an issue. This codelab was tested end to end on Windows 11 with QNX SDP 8.0 and a VirtualBox x86_64 VM, November 2026.*
