@@ -24,6 +24,7 @@ ssh %SSHOPT% root@%IP% "mkdir -p /data/coldchain; slay -s KILL -f coldchaind >/d
 echo [3/4] copying files ...
 scp -q %SSHOPT% build\coldchaind root@%IP%:/data/coldchain/coldchaind.new || exit /b 1
 scp -q %SSHOPT% tools\trace.sh root@%IP%:/data/coldchain/ || exit /b 1
+if exist "%QNX_TARGET%\x86_64\usr\bin\traceprinter" scp -q %SSHOPT% "%QNX_TARGET%\x86_64\usr\bin\traceprinter" root@%IP%:/data/coldchain/
 scp -q %SSHOPT% -r web root@%IP%:/data/coldchain/ || exit /b 1
 ssh %SSHOPT% root@%IP% "mv -f /data/coldchain/coldchaind.new /data/coldchain/coldchaind && chmod +x /data/coldchain/coldchaind" || exit /b 1
 

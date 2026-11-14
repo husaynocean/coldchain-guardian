@@ -44,6 +44,33 @@ Measured on QNX 8.0.0 x86_64 in a VirtualBox 7.2 VM (2 vCPUs) on a Windows 11 la
 
 **What these numbers do and don't show.** The flood result is the scheduler doing its job: priority alone decides who runs, and it holds under full load. The idle jitter is *not* QNX's real-time performance. QNX's clock is set to a 1 ms tick (`pidin syspage=qtime`), but a desktop VM delivers those ticks late whenever Windows pauses the virtual CPUs, so both loops see the same millisecond-level noise, with occasional spikes above 100 ms. Absolute jitter needs real hardware (for example a Raspberry Pi 5 with `make qnx-arm`), which I have not measured.
 
+### Evidence from the target
+
+Thread priorities while running (`pidin -p coldchaind`). The driver thread (tid 2) was created at priority **50** but shows **60**: it inherited the guardian's priority while serving the guardian's `devctl()` sensor read.
+
+```
+     pid tid name                         prio STATE          Blocked
+  729112   1 data/coldchain/coldchaind     10r SIGWAITINFO
+  729112   2 data/coldchain/coldchaind     60r RECEIVE        1
+  729112   3 data/coldchain/coldchaind     20f NANOSLEEP
+  729112   4 data/coldchain/coldchaind     60f RECEIVE        2
+  729112   5 data/coldchain/coldchaind     10r NANOSLEEP
+  729112   6 data/coldchain/coldchaind     15r REPLY          188432
+```
+
+The driver answering from the QNX shell (`cat /dev/coldchain`):
+
+```
+temp=4.24 door=0 power=1 comp=1 backup=0 batt=100 level=0
+```
+
+The guardian's own decisions inside the kernel event log (`tracelogger -n 3`, then `traceprinter`). These are `trace_logf()` user events (code 102 = late wake-up), interleaved with 3,128 kernel events from the same capture:
+
+```
+t:0x425f8293197 CPU:00 USREVENT :EVENT:102 STR:"guardian late interval_us=6243"
+t:0x425f88fc09d CPU:01 USREVENT :EVENT:102 STR:"guardian late interval_us=3817"
+```
+
 ---
 
 ## Architecture

@@ -1,0 +1,4 @@
+# Shell scripts run on QNX: keep LF endings even on Windows checkouts
+*.sh text eol=lf
+# Windows batch files need CRLF
+*.bat text eol=crlf
